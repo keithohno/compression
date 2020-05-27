@@ -1,2 +1,2 @@
-du -sbh $1/r* $1/*/lz4 $1/*/gzip
-du -sbh $1/r* $1/*/lz4 $1/*/gzip > $1/cratios
+du -sbh $1/r* $1/*.lz4
+du -sbh $1/r* $1/*.lz4 > $1/cratios

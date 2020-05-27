@@ -12,4 +12,5 @@ sudo systemctl restart redis
 pid=$(pgrep -f redis-server)
 
 sudo gcore $pid
+rm -rf $1
 rename core.$pid $1 *

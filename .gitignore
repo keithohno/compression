@@ -1,6 +1,4 @@
 *
 
 !.gitignore
-!compress.sh
-!analyze.sh
-!workload.sh
+!*.sh
