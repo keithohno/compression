@@ -1,3 +1,12 @@
-du -sb $2/$1/r* $2/$1/*.lz4
-du -sb $2/$1/r* $2/$1/*.lz4 > $2/$1/csizes
-python analyze.py $2/$1/csizes > $2/$1/cratios
+#!/bin/bash
+
+core=$1
+folder=$2
+shift 2
+
+cd $folder
+du -sb $core
+
+for f in *.lz4; do
+  du -sb $f
+done
