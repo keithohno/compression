@@ -11,5 +11,3 @@ for cs in $@; do
 done
 
 mv $core $folder/
-
-exit
