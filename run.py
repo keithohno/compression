@@ -60,11 +60,11 @@ def cleanup(name, folder):
     blockproc(proc)
 
 def main():
-    sizes = ['1K']
-    folder = 'test1'
+    sizes = ['256', '512', '1K', '2K', '4K']
+    folder = 'test2'
     core = 'core'
     prep(folder)
-    for i in range(0, 4000001, 100000):
+    for i in range(0, 4000001, 25000):
         params = WLParams(recct=2000000, opct=i)
         load_params(params)
         workload(core)
@@ -72,5 +72,5 @@ def main():
         analyze(core, folder, params)
         cleanup(core, folder)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
