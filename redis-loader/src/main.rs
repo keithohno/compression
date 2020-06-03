@@ -1,12 +1,12 @@
-extern crate redis;
 extern crate rand;
+extern crate redis;
 
-use std::time::Instant;
-use std::thread;
-use std::sync::{mpsc, Arc, Mutex};
 use std::num::Wrapping;
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
+use std::time::Instant;
 
-use rand::{RngCore, SeedableRng, rngs::StdRng};
+use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 const FNV_OFFSET: Wrapping<usize> = Wrapping(0xCBF29CE484222325);
 const FNV_PRIME: Wrapping<usize> = Wrapping(1099511628211);
@@ -27,7 +27,7 @@ fn fnv(val: usize) -> usize {
 
 enum Task {
     Set(usize),
-    Quit
+    Quit,
 }
 
 struct Manager {
@@ -70,27 +70,32 @@ struct Worker {
 
 impl Worker {
     fn new(addr: String, rx: Arc<Mutex<mpsc::Receiver<Task>>>) -> Self {
-        Worker { 
+        Worker {
             addr,
             thread: None,
-            rx
+            rx,
         }
     }
-    fn run(&mut self){
+    fn run(&mut self) {
         let mut client = Client::new(&self.addr);
         let rx = Arc::clone(&self.rx);
         let handle = thread::spawn(move || loop {
-            match rx.lock().expect("ERR: mutex lock").recv().expect("ERR: channel recv") {
+            match rx
+                .lock()
+                .expect("ERR: mutex lock")
+                .recv()
+                .expect("ERR: channel recv")
+            {
                 Task::Set(key) => client.set(key),
                 Task::Quit => {
                     client.query();
                     break;
-                },
+                }
             };
         });
         self.thread = Some(handle);
     }
-    fn quit(&mut self){
+    fn quit(&mut self) {
         match self.thread.take() {
             Some(handle) => handle.join().expect("ERR: thread join"),
             _ => {}
@@ -120,7 +125,7 @@ impl Client {
             rng,
             pipe,
             pipe_cap,
-            pipe_vol: 0
+            pipe_vol: 0,
         }
     }
     fn set(&mut self, key: usize) {
@@ -135,7 +140,9 @@ impl Client {
         }
     }
     fn query(&mut self) {
-        self.pipe.query::<()>(&mut self.conn).expect("ERR: bad redis query");
+        self.pipe
+            .query::<()>(&mut self.conn)
+            .expect("ERR: bad redis query");
         self.pipe.clear();
         self.pipe_vol = 0;
     }
@@ -144,13 +151,13 @@ impl Client {
         for i in 0..10 {
             let mut bytes = vec![0; 100];
             self.rng.fill_bytes(&mut bytes);
-            ret.push((format!("field{}",i), bytes));
+            ret.push((format!("field{}", i), bytes));
         }
         ret
     }
 }
 
-fn main(){
+fn main() {
     let start = Instant::now();
     workload();
     let duration = start.elapsed();
