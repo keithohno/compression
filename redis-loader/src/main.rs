@@ -6,8 +6,6 @@ use std::thread;
 use std::sync::{mpsc, Arc, Mutex};
 use std::num::Wrapping;
 
-use redis::{Commands, RedisResult};
-
 use rand::{RngCore, SeedableRng, rngs::StdRng};
 
 const FNV_OFFSET: Wrapping<usize> = Wrapping(0xCBF29CE484222325);
@@ -83,8 +81,11 @@ impl Worker {
         let rx = Arc::clone(&self.rx);
         let handle = thread::spawn(move || loop {
             match rx.lock().expect("ERR: mutex lock").recv().expect("ERR: channel recv") {
-                Task::Set(key) => client.set(key).expect("ERR: redis"),
-                Task::Quit => break
+                Task::Set(key) => client.set(key),
+                Task::Quit => {
+                    client.query();
+                    break;
+                },
             };
         });
         self.thread = Some(handle);
@@ -100,6 +101,9 @@ impl Worker {
 struct Client {
     conn: redis::Connection,
     rng: StdRng,
+    pipe: redis::Pipeline,
+    pipe_cap: usize,
+    pipe_vol: usize,
 }
 
 impl Client {
@@ -109,12 +113,31 @@ impl Client {
             .get_connection()
             .expect("ERR: could not establish connection with redis server");
         let rng = StdRng::from_entropy();
-        Client { conn, rng }
-
+        let pipe_cap = 16;
+        let pipe = redis::Pipeline::with_capacity(pipe_cap);
+        Client {
+            conn,
+            rng,
+            pipe,
+            pipe_cap,
+            pipe_vol: 0
+        }
     }
-    fn set(&mut self, key: usize) -> RedisResult<()> {
+    fn set(&mut self, key: usize) {
         let val = self.val();
-        self.conn.hset_multiple(format!("user{}", fnv(key)), &val)
+        self.pipe.hset_multiple(format!("user{}", fnv(key)), &val);
+        self.query_if_full();
+    }
+    fn query_if_full(&mut self) {
+        self.pipe_vol += 1;
+        if self.pipe_vol > self.pipe_cap {
+            self.query()
+        }
+    }
+    fn query(&mut self) {
+        self.pipe.query::<()>(&mut self.conn).expect("ERR: bad redis query");
+        self.pipe.clear();
+        self.pipe_vol = 0;
     }
     fn val(&mut self) -> Vec<(String, Vec<u8>)> {
         let mut ret: Vec<(String, Vec<u8>)> = Vec::new();
