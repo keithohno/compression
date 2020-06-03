@@ -2,7 +2,7 @@
 import subprocess
 
 class WLParams:
-    def __init__(self, recct=0, opct=0, rdprop=1, udprop=0):
+    def __init__(self, recct=0, opct=0, rdprop=0, udprop=1):
         self.recct = recct
         self.opct = opct
         self.rdprop = rdprop
@@ -46,7 +46,7 @@ def analyze(name, folder, params):
     lines = out.decode('utf-8').splitlines()
     orig = int(lines[0].split()[0])
     for l in lines[1:]:
-        ratio = round(int(l.split()[0]) / orig, 4)
+        ratio = round(int(l.split()[0]) / orig, 5)
         f = open("{}/{}".format(folder, l.split()[1].split('.')[0]), 'a+')
         f.write("{} {} {}\n".format(params.to_str(opct=True), ratio, orig))
     blockproc(proc)
@@ -61,16 +61,18 @@ def cleanup(name, folder):
 
 def main():
     sizes = ['256', '512', '1K', '2K', '4K']
-    folder = 'test2'
+    base = 'test_r'
     core = 'core'
-    prep(folder)
-    for i in range(0, 4000001, 25000):
-        params = WLParams(recct=2000000, opct=i)
-        load_params(params)
-        workload(core)
-        compress(core, folder, sizes)
-        analyze(core, folder, params)
-        cleanup(core, folder)
+    for recct in range(200000, 20000001, 200000):
+        folder = "{}{:02d}".format(base, int(recct/100000))
+        prep(folder)
+        for opct in range(0, recct*2+1, int(recct/50)):
+            params = WLParams(recct=recct, opct=opct)
+            load_params(params)
+            workload(core)
+            compress(core, folder, sizes)
+            analyze(core, folder, params)
+            cleanup(core, folder)
 
 if __name__ == '__main__':
     main()
