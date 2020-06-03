@@ -1,10 +1,14 @@
 extern crate redis;
+extern crate rand;
 
 use std::time::Instant;
 use std::thread;
 use std::sync::{mpsc, Arc, Mutex};
-use redis::{Commands, RedisResult};
 use std::num::Wrapping;
+
+use redis::{Commands, RedisResult};
+
+use rand::{RngCore, SeedableRng, rngs::StdRng};
 
 const FNV_OFFSET: Wrapping<usize> = Wrapping(0xCBF29CE484222325);
 const FNV_PRIME: Wrapping<usize> = Wrapping(1099511628211);
@@ -45,14 +49,14 @@ impl Manager {
         Manager { workers, tx }
     }
     fn dispatch(&self, task: Task) {
-        self.tx.send(task).unwrap();
+        self.tx.send(task).expect("ERR: channel send set");
     }
 }
 
 impl Drop for Manager {
     fn drop(&mut self) {
         for _ in &self.workers {
-            self.tx.send(Task::Quit).unwrap();
+            self.tx.send(Task::Quit).expect("ERR: channel send quit");
         }
         for w in &mut self.workers {
             w.quit();
@@ -78,8 +82,8 @@ impl Worker {
         let mut client = Client::new(&self.addr);
         let rx = Arc::clone(&self.rx);
         let handle = thread::spawn(move || loop {
-            match rx.lock().unwrap().recv().unwrap() {
-                Task::Set(key) => client.set(key).unwrap(),
+            match rx.lock().expect("ERR: mutex lock").recv().expect("ERR: channel recv") {
+                Task::Set(key) => client.set(key).expect("ERR: redis"),
                 Task::Quit => break
             };
         });
@@ -87,14 +91,15 @@ impl Worker {
     }
     fn quit(&mut self){
         match self.thread.take() {
-            Some(handle) => handle.join().unwrap(),
+            Some(handle) => handle.join().expect("ERR: thread join"),
             _ => {}
         };
     }
 }
 
 struct Client {
-    conn: redis::Connection
+    conn: redis::Connection,
+    rng: StdRng,
 }
 
 impl Client {
@@ -103,11 +108,22 @@ impl Client {
             .expect(&format!("ERR: bad address `{}`", addr))
             .get_connection()
             .expect("ERR: could not establish connection with redis server");
-        Client { conn }
+        let rng = StdRng::from_entropy();
+        Client { conn, rng }
 
     }
     fn set(&mut self, key: usize) -> RedisResult<()> {
-        self.conn.set(format!("user{}", fnv(key)), key)
+        let val = self.val();
+        self.conn.hset_multiple(format!("user{}", fnv(key)), &val)
+    }
+    fn val(&mut self) -> Vec<(String, Vec<u8>)> {
+        let mut ret: Vec<(String, Vec<u8>)> = Vec::new();
+        for i in 0..10 {
+            let mut bytes = vec![0; 100];
+            self.rng.fill_bytes(&mut bytes);
+            ret.push((format!("field{}",i), bytes));
+        }
+        ret
     }
 }
 
@@ -119,8 +135,8 @@ fn main(){
 }
 
 fn workload() {
-    let m = Manager::new(6, "redis://127.0.0.1/");
-    for i in 0..5000 {
+    let m = Manager::new(15, "redis://127.0.0.1/");
+    for i in 0..50000 {
         m.dispatch(Task::Set(i));
     }
 }
