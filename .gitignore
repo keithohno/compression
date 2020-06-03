@@ -1,5 +1,7 @@
-*
+test*
+YCSB
+*.dat
 
-!.gitignore
-!*.sh
-!*.py
+redis-loader/target
+redis-loader/Cargo.lock
+
