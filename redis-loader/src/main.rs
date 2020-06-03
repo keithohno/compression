@@ -4,6 +4,24 @@ use std::time::Instant;
 use std::thread;
 use std::sync::{mpsc, Arc, Mutex};
 use redis::{Commands, RedisResult};
+use std::num::Wrapping;
+
+const FNV_OFFSET: Wrapping<usize> = Wrapping(0xCBF29CE484222325);
+const FNV_PRIME: Wrapping<usize> = Wrapping(1099511628211);
+const FNV_MASK: Wrapping<usize> = Wrapping(0xff);
+
+fn fnv(val: usize) -> usize {
+    let mut val = Wrapping(val);
+    let mut hash = FNV_OFFSET;
+    for _ in 0..8 {
+        let octet = val & FNV_MASK;
+        val = val >> 8;
+
+        hash = hash ^ octet;
+        hash *= FNV_PRIME;
+    }
+    hash.0
+}
 
 enum Task {
     Set(usize),
@@ -89,7 +107,7 @@ impl Client {
 
     }
     fn set(&mut self, key: usize) -> RedisResult<()> {
-        self.conn.set(key, key)
+        self.conn.set(format!("user{}", fnv(key)), key)
     }
 }
 
