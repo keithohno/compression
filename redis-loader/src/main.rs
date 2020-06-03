@@ -1,11 +1,17 @@
+extern crate confy;
 extern crate rand;
 extern crate redis;
+extern crate serde;
+extern crate serde_json;
 
 use std::num::Wrapping;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
+use serde::{Deserialize, Serialize};
+
+use rand::distributions::{Distribution, Uniform};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 const FNV_OFFSET: Wrapping<usize> = Wrapping(0xCBF29CE484222325);
@@ -27,6 +33,7 @@ fn fnv(val: usize) -> usize {
 
 enum Task {
     Set(usize),
+    SetMulti(std::ops::Range<usize>),
     Quit,
 }
 
@@ -37,6 +44,8 @@ struct Manager {
 
 impl Manager {
     fn new(n: usize, addr: &str) -> Self {
+        let mut c = Client::new("redis://127.0.0.1/");
+        c.flush_all();
         let (tx, rx) = mpsc::channel();
         let rx = Arc::new(Mutex::new(rx));
         let mut workers = Vec::new();
@@ -44,7 +53,7 @@ impl Manager {
             workers.push(Worker::new(String::from(addr), rx.clone()));
             workers[i].run();
         }
-        Manager { workers, tx }
+        Self { workers, tx }
     }
     fn dispatch(&self, task: Task) {
         self.tx.send(task).expect("ERR: channel send set");
@@ -70,7 +79,7 @@ struct Worker {
 
 impl Worker {
     fn new(addr: String, rx: Arc<Mutex<mpsc::Receiver<Task>>>) -> Self {
-        Worker {
+        Self {
             addr,
             thread: None,
             rx,
@@ -87,6 +96,7 @@ impl Worker {
                 .expect("ERR: channel recv")
             {
                 Task::Set(key) => client.set(key),
+                Task::SetMulti(range) => client.set_multi(range),
                 Task::Quit => {
                     client.query();
                     break;
@@ -120,7 +130,7 @@ impl Client {
         let rng = StdRng::from_entropy();
         let pipe_cap = 16;
         let pipe = redis::Pipeline::with_capacity(pipe_cap);
-        Client {
+        Self {
             conn,
             rng,
             pipe,
@@ -128,10 +138,20 @@ impl Client {
             pipe_vol: 0,
         }
     }
+    fn flush_all(&mut self) {
+        redis::cmd("FLUSHALL")
+            .query::<()>(&mut self.conn)
+            .expect("ERR: redis flushall");
+    }
     fn set(&mut self, key: usize) {
         let val = self.val();
         self.pipe.hset_multiple(format!("user{}", fnv(key)), &val);
         self.query_if_full();
+    }
+    fn set_multi(&mut self, range: std::ops::Range<usize>) {
+        for i in range {
+            self.set(i);
+        }
     }
     fn query_if_full(&mut self) {
         self.pipe_vol += 1;
@@ -157,16 +177,31 @@ impl Client {
     }
 }
 
-fn main() {
-    let start = Instant::now();
-    workload();
-    let duration = start.elapsed();
-    println!("time: {:?}", duration);
+#[derive(Serialize, Deserialize)]
+struct Workload {
+    record_count: usize,
+    operation_count: usize,
 }
 
-fn workload() {
+fn main() {
+    let config = std::fs::read_to_string("config.json").expect("ERR: no config file");
+    let workload: Workload = serde_json::from_str(&config).expect("ERR: bad config file");
+    run_workload(workload);
+}
+
+fn run_workload(workload: Workload) {
+    let start = Instant::now();
     let m = Manager::new(15, "redis://127.0.0.1/");
-    for i in 0..50000 {
+    for i in 0..workload.record_count {
         m.dispatch(Task::Set(i));
     }
+
+    let mut rng = StdRng::from_entropy();
+    let keys = Uniform::from(0..workload.record_count);
+    for _ in 0..workload.operation_count {
+        m.dispatch(Task::Set(keys.sample(&mut rng)));
+    }
+    drop(m);
+    let duration = start.elapsed();
+    println!("time: {:?}", duration);
 }
