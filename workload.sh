@@ -3,9 +3,9 @@
 redis-cli flushdb
 sudo systemctl restart redis
 
-#./YCSB/bin/ycsb.sh load redis -s -threads 2 -P YCSB/workloads/workloada -P params.dat
-./YCSB/bin/ycsb.sh load redis -s -P YCSB/workloads/workloada -P params.dat
-./YCSB/bin/ycsb.sh run redis -s -threads 2 -target 40000 -P YCSB/workloads/workloada -P params.dat
+cd redis-loader
+cargo run --release
+cd ..
 
 pid=$(pgrep -f redis-server)
 

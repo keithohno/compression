@@ -1,19 +1,18 @@
 
 import subprocess
+import json
+
 
 class WLParams:
-    def __init__(self, recct=0, opct=0, rdprop=0, udprop=1):
+    def __init__(self, recct=0, opct=0):
         self.recct = recct
         self.opct = opct
-        self.rdprop = rdprop
-        self.udprop = udprop
 
     def to_str(self, recct=False, opct=False, rdprop=False, udprop=False):
-        return("{} {} {} {}".format(\
-                self.recct if recct else '', \
-                self.opct if opct else '', \
-                self.rdprop if rdprop else '', \
-                self.udprop if udprop else ''))
+        return("{} {}".format(
+            self.recct if recct else '',
+            self.opct if opct else ''))
+
 
 def blockproc(proc):
     try:
@@ -22,26 +21,30 @@ def blockproc(proc):
         proc.terminate()
         exit()
 
+
 def workload(name):
     proc = subprocess.Popen(['./workload.sh', name])
     blockproc(proc)
 
+
 def load_params(params):
-    f = open('params.dat', 'w+')
-    f.write("redis.host=127.0.0.1\n")
-    f.write("redis.port=6379\n")
-    f.write("recordcount={}\n".format(params.recct))
-    f.write("operationcount={}\n".format(params.opct))
-    f.write("readproportion={}\n".format(params.rdprop))
-    f.write("updateproportion={}\n".format(params.udprop))
+    config = json.dumps({
+        "record_count": params.recct,
+        "operation_count": params.opct
+    })
+    f = open('redis-loader/config.json', 'w+')
+    f.write(config)
     f.close()
+
 
 def compress(name, folder, sizes):
     proc = subprocess.Popen(['./compress.sh', name, folder] + sizes)
     blockproc(proc)
 
+
 def analyze(name, folder, params):
-    proc = subprocess.Popen(['./analyze.sh', name, folder], stdout=subprocess.PIPE)
+    proc = subprocess.Popen(['./analyze.sh', name, folder],
+                            stdout=subprocess.PIPE)
     out, _ = proc.communicate()
     lines = out.decode('utf-8').splitlines()
     orig = int(lines[0].split()[0])
@@ -51,28 +54,32 @@ def analyze(name, folder, params):
         f.write("{} {} {}\n".format(params.to_str(opct=True), ratio, orig))
     blockproc(proc)
 
+
 def prep(folder):
     proc = subprocess.Popen(["rm", "-rf", folder])
     blockproc(proc)
+
 
 def cleanup(name, folder):
     proc = subprocess.Popen(['./cleanup.sh', name, folder])
     blockproc(proc)
 
+
 def main():
     sizes = ['256', '512', '1K', '2K', '4K']
-    base = 'test_r'
+    base = 'DELETE_'
     core = 'core'
-    for recct in range(200000, 20000001, 200000):
-        folder = "{}{:02d}".format(base, int(recct/100000))
+    for recct in range(20000, 40001, 20000):
+        folder = "{}{:02d}".format(base, int(recct))
         prep(folder)
-        for opct in range(0, recct*2+1, int(recct/50)):
+        for opct in range(20000, 40001, 20000):
             params = WLParams(recct=recct, opct=opct)
             load_params(params)
             workload(core)
             compress(core, folder, sizes)
             analyze(core, folder, params)
             cleanup(core, folder)
+
 
 if __name__ == '__main__':
     main()
