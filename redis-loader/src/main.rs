@@ -14,8 +14,6 @@ use serde::{Deserialize, Serialize};
 use rand::distributions::{Distribution, Uniform};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 
-use redis::ToRedisArgs;
-
 const FNV_OFFSET: Wrapping<usize> = Wrapping(0xCBF29CE484222325);
 const FNV_PRIME: Wrapping<usize> = Wrapping(1099511628211);
 const FNV_MASK: Wrapping<usize> = Wrapping(0xff);
@@ -97,12 +95,12 @@ impl Worker {
         let mut client = Client::new(&self.addr, self.record_params);
         let rx = Arc::clone(&self.rx);
         let handle = thread::spawn(move || loop {
-            match rx
+            let task = rx
                 .lock()
                 .expect("ERR: mutex lock")
                 .recv()
-                .expect("ERR: channel recv")
-            {
+                .expect("ERR: channel recv");
+            match task {
                 Task::Set(key) => client.set(key),
                 Task::SetMulti(range) => client.set_multi(range),
                 Task::Quit => {
@@ -224,7 +222,7 @@ fn main() {
 
 fn run_workload(workload: WorkloadParams) {
     let start = Instant::now();
-    let m = Manager::new(15, "redis://127.0.0.1/", workload.record_params);
+    let m = Manager::new(6, "redis://127.0.0.1/", workload.record_params);
     for i in 0..workload.record_count {
         m.dispatch(Task::Set(i));
     }
