@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use rand::distributions::{Distribution, Uniform};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 
+use redis::ToRedisArgs;
+
 const FNV_OFFSET: Wrapping<usize> = Wrapping(0xCBF29CE484222325);
 const FNV_PRIME: Wrapping<usize> = Wrapping(1099511628211);
 const FNV_MASK: Wrapping<usize> = Wrapping(0xff);
@@ -43,14 +45,14 @@ struct Manager {
 }
 
 impl Manager {
-    fn new(n: usize, addr: &str) -> Self {
-        let mut c = Client::new("redis://127.0.0.1/");
+    fn new(n: usize, addr: &str, record_params: RecordParams) -> Self {
+        let mut c = Client::new("redis://127.0.0.1/", record_params);
         c.flush_all();
         let (tx, rx) = mpsc::channel();
         let rx = Arc::new(Mutex::new(rx));
         let mut workers = Vec::new();
         for i in 0..n {
-            workers.push(Worker::new(String::from(addr), rx.clone()));
+            workers.push(Worker::new(String::from(addr), rx.clone(), record_params));
             workers[i].run();
         }
         Self { workers, tx }
@@ -75,18 +77,24 @@ struct Worker {
     addr: String,
     thread: Option<thread::JoinHandle<()>>,
     rx: Arc<Mutex<mpsc::Receiver<Task>>>,
+    record_params: RecordParams,
 }
 
 impl Worker {
-    fn new(addr: String, rx: Arc<Mutex<mpsc::Receiver<Task>>>) -> Self {
+    fn new(
+        addr: String,
+        rx: Arc<Mutex<mpsc::Receiver<Task>>>,
+        record_params: RecordParams,
+    ) -> Self {
         Self {
             addr,
             thread: None,
             rx,
+            record_params,
         }
     }
     fn run(&mut self) {
-        let mut client = Client::new(&self.addr);
+        let mut client = Client::new(&self.addr, self.record_params);
         let rx = Arc::clone(&self.rx);
         let handle = thread::spawn(move || loop {
             match rx
@@ -119,10 +127,12 @@ struct Client {
     pipe: redis::Pipeline,
     pipe_cap: usize,
     pipe_vol: usize,
+    record_params: RecordParams,
+    vol_distr: Uniform<usize>,
 }
 
 impl Client {
-    fn new(addr: &str) -> Self {
+    fn new(addr: &str, record_params: RecordParams) -> Self {
         let conn = redis::Client::open(addr)
             .expect(&format!("ERR: bad address `{}`", addr))
             .get_connection()
@@ -130,12 +140,15 @@ impl Client {
         let rng = StdRng::from_entropy();
         let pipe_cap = 16;
         let pipe = redis::Pipeline::with_capacity(pipe_cap);
+        let vol_distr = Uniform::from(record_params.field_vol_min..record_params.field_vol_max);
         Self {
             conn,
             rng,
             pipe,
             pipe_cap,
             pipe_vol: 0,
+            record_params,
+            vol_distr,
         }
     }
     fn flush_all(&mut self) {
@@ -144,8 +157,14 @@ impl Client {
             .expect("ERR: redis flushall");
     }
     fn set(&mut self, key: usize) {
-        let val = self.val();
-        self.pipe.hset_multiple(format!("user{}", fnv(key)), &val);
+        let key = format!("user{}", fnv(key));
+        if self.record_params.field_count == 0 {
+            let val = self.build_field();
+            self.pipe.set(key, val);
+        } else {
+            let val = self.build_set();
+            self.pipe.hset_multiple(key, &val);
+        }
         self.query_if_full();
     }
     fn set_multi(&mut self, range: std::ops::Range<usize>) {
@@ -166,32 +185,46 @@ impl Client {
         self.pipe.clear();
         self.pipe_vol = 0;
     }
-    fn val(&mut self) -> Vec<(String, Vec<u8>)> {
+    fn build_set(&mut self) -> Vec<(String, Vec<u8>)> {
         let mut ret: Vec<(String, Vec<u8>)> = Vec::new();
-        for i in 0..10 {
-            let mut bytes = vec![0; 100];
-            self.rng.fill_bytes(&mut bytes);
-            ret.push((format!("field{}", i), bytes));
+        for i in 0..self.record_params.field_count {
+            ret.push((format!("field{}", i), self.build_field()))
         }
         ret
+    }
+    fn build_field(&mut self) -> Vec<u8> {
+        let field_vol = self.vol_distr.sample(&mut self.rng);
+        let mut bytes = vec![0; field_vol];
+        self.rng.fill_bytes(&mut bytes);
+        bytes.append(&mut vec![0; self.record_params.field_cap - field_vol]);
+        bytes
     }
 }
 
 #[derive(Serialize, Deserialize)]
-struct Workload {
+struct WorkloadParams {
     record_count: usize,
     operation_count: usize,
+    record_params: RecordParams,
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone)]
+struct RecordParams {
+    field_count: usize,
+    field_cap: usize,
+    field_vol_min: usize,
+    field_vol_max: usize,
 }
 
 fn main() {
     let config = std::fs::read_to_string("config.json").expect("ERR: no config file");
-    let workload: Workload = serde_json::from_str(&config).expect("ERR: bad config file");
+    let workload: WorkloadParams = serde_json::from_str(&config).expect("ERR: bad config file");
     run_workload(workload);
 }
 
-fn run_workload(workload: Workload) {
+fn run_workload(workload: WorkloadParams) {
     let start = Instant::now();
-    let m = Manager::new(15, "redis://127.0.0.1/");
+    let m = Manager::new(15, "redis://127.0.0.1/", workload.record_params);
     for i in 0..workload.record_count {
         m.dispatch(Task::Set(i));
     }
