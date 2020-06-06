@@ -1,4 +1,5 @@
-extern crate confy;
+#![allow(dead_code)]
+
 extern crate rand;
 extern crate redis;
 extern crate serde;
@@ -126,7 +127,8 @@ struct Client {
     pipe_cap: usize,
     pipe_vol: usize,
     record_params: RecordParams,
-    vol_distr: Uniform<usize>,
+    uni_dist: Uniform<usize>,
+    cons_dist: usize,
 }
 
 impl Client {
@@ -138,7 +140,7 @@ impl Client {
         let rng = StdRng::from_entropy();
         let pipe_cap = 16;
         let pipe = redis::Pipeline::with_capacity(pipe_cap);
-        let vol_distr = Uniform::from(record_params.field_vol_min..record_params.field_vol_max);
+        let uni_dist = Uniform::from(record_params.field_cap_min..record_params.field_cap_max);
         Self {
             conn,
             rng,
@@ -146,7 +148,8 @@ impl Client {
             pipe_cap,
             pipe_vol: 0,
             record_params,
-            vol_distr,
+            uni_dist,
+            cons_dist: record_params.field_cap,
         }
     }
     fn flush_all(&mut self) {
@@ -191,10 +194,14 @@ impl Client {
         ret
     }
     fn build_field(&mut self) -> Vec<u8> {
-        let field_vol = self.vol_distr.sample(&mut self.rng);
+        let field_cap = match self.record_params.field_cap_dist {
+            'u' => self.uni_dist.sample(&mut self.rng),
+            _ => self.cons_dist,
+        };
+        let field_vol = (field_cap as f64 * self.record_params.field_density) as usize;
         let mut bytes = vec![0; field_vol];
         self.rng.fill_bytes(&mut bytes);
-        bytes.append(&mut vec![0; self.record_params.field_cap - field_vol]);
+        bytes.append(&mut vec![0; field_cap - field_vol]);
         bytes
     }
 }
@@ -209,9 +216,11 @@ struct WorkloadParams {
 #[derive(Serialize, Deserialize, Copy, Clone)]
 struct RecordParams {
     field_count: usize,
+    field_cap_dist: char,
+    field_cap_min: usize,
+    field_cap_max: usize,
     field_cap: usize,
-    field_vol_min: usize,
-    field_vol_max: usize,
+    field_density: f64,
 }
 
 fn main() {
