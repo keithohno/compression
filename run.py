@@ -2,6 +2,8 @@
 import subprocess
 import json
 
+CORE_NAME = "core"
+
 
 class RecParams:
     def __init__(self, fcount=0, fdist='c', fcapmin=0, fcapmax=1, fcap=100, fdens=1.0):
@@ -38,7 +40,11 @@ class WLParams:
 def blockproc(proc):
     try:
         proc.wait()
+        if proc.returncode != 0:
+            print("exiting (subprocess error)...")
+            exit()
     except KeyboardInterrupt:
+        print("exiting (keyboard interrupt)...")
         proc.terminate()
         exit()
 
@@ -66,53 +72,85 @@ def load_params(params):
     f.close()
 
 
-def compress(name, folder, sizes):
-    proc = subprocess.Popen(['./compress.sh', name, folder] + sizes)
+def compress(name, folder, sizes, status, *args):
+    proc = subprocess.Popen(['./lz4_compress.sh', name, folder] +
+                            sizes, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    lz4_lines = proc.communicate()[0].decode('utf-8')
+    analyze(folder, lz4_lines, status, *args)
     blockproc(proc)
 
 
-def analyze(name, folder, params):
-    proc = subprocess.Popen(['./analyze.sh', name, folder],
-                            stdout=subprocess.PIPE)
-    out, _ = proc.communicate()
-    lines = out.decode('utf-8').splitlines()
-    orig = int(lines[0].split()[0])
-    for l in lines[1:]:
-        ratio = round(int(l.split()[0]) / orig, 5)
-        f = open("{}/{}".format(folder, l.split()[1].split('.')[0]), 'a+')
-        f.write("{} {} {}\n".format(params.to_str(fdens=True), 1/ratio, orig))
+def analyze(folder, lz4_lines, status, *args):
+    lz4_updates = lz4_analyze(lz4_lines)
+    # lock status file
+    proc = subprocess.Popen(['mkdir', "{}/status.lck".format(folder)])
+    blockproc(proc)
+    # update data files
+    for item in lz4_updates:
+        f = open("{}/lz4/{}".format(folder, item[0]), 'a+')
+        f.write("{} {} {} {}\n".format(status, item[1], item[2], args[0]))
+        f.close()
+    # update status file
+    f = open("{}/status".format(folder), 'w+')
+    f.write(str(status))
+    f.close()
+    # unlock status file
+    proc = subprocess.Popen(['rm', '-r', "{}/status.lck".format(folder)])
     blockproc(proc)
 
 
-def prep(folder):
-    proc = subprocess.Popen(["rm", "-rf", folder])
-    blockproc(proc)
+def lz4_analyze(lines):
+    lines = lines.split('SPLIT')
+    orig = 0
+    ret = []
+    for line in lines:
+        # skip initial empty line
+        if len(line) == 0:
+            continue
+        # extract core size from first line
+        words = line.split()
+        if words[0] == CORE_NAME:
+            orig = int(words[1])
+            continue
+        # for all other lines, output the following:
+        # (comp block size, comp ratio, comp size)
+        ratio = orig/int(words[2])
+        ret.append((words[1], ratio, words[2]))
+    return ret
 
 
-def cleanup(name, folder):
-    proc = subprocess.Popen(['./cleanup.sh', name, folder])
+def get_status(folder):
+    try:
+        f = open("{}/status".format(folder), 'r')
+        status = int(f.read())
+        f.close()
+        return status
+    except FileNotFoundError:
+        return -1
+
+
+def clean(folder):
+    proc = subprocess.Popen("rm -f {}/*.lz4".format(folder), shell=True)
     blockproc(proc)
 
 
 def main():
     sizes = ['256', '512', '1K', '2K', '4K']
     base = 'test1'
-    core = 'core'
+    core = CORE_NAME
     recct = 4000000
     opct = 12000000
     for (fmin, fmax) in [(80, 120), (60, 140), (90, 110), (70, 130)]:
         folder = "test/{}/uni_cons{}-{}".format(base, fmin, fmax)
-        prep(folder)
-        for i in range(0, 100, 1):
+        clean(folder)
+        status = get_status(folder)
+        for i in range(status+1, 100, 1):
             rprms = RecParams(fcount=5, fdist='u', fcapmin=fmin,
                               fcapmax=fmax, fdens=i / 100)
             params = WLParams(recct=recct, opct=opct, rprms=rprms)
             load_params(params)
             workload(core)
-            compress(core, folder, sizes)
-            analyze(core, folder, params)
-            cleanup(core, folder)
-        break
+            compress(core, folder, sizes, i, rprms.fdens)
 
 
 if __name__ == '__main__':
