@@ -7,7 +7,6 @@ folder=$2
 shift 2
 
 mkdir -p $folder/lz4
-touch $folder/status
 
 echo SPLIT $core
 du -sb $core

@@ -243,5 +243,5 @@ fn run_workload(workload: WorkloadParams) {
     }
     drop(m);
     let duration = start.elapsed();
-    println!("time: {:?}", duration);
+    println!("redis-load: {:?}", duration);
 }
