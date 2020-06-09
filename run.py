@@ -54,9 +54,11 @@ def blockproc(proc):
 
 
 def workload(name):
+    s = time.time()
     proc = subprocess.Popen(['./workload.sh', name],
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     blockproc(proc)
+    print("workload: {}s".format(time.time() - s))
 
 
 def load_params(params):
@@ -193,7 +195,7 @@ def main():
     param_set = []
 
     for (fdist, frange, fstd) in test_set:
-        param_set.append(WLParams(recct=4000000, opct=120000,
+        param_set.append(WLParams(recct=4000000, opct=12000000,
                                   rprms=RecParams(fcount=5, fdist=fdist,
                                                   fav=100, frange=frange, fstd=fstd)))
 
@@ -204,11 +206,11 @@ def main():
         for j in range(status+1, 101, 1):
             s = time.time()
             param_set[i].rprms.fdens = j / 100
-            param_set[i].recct += random.randint(-200000, 200000)
             load_params(param_set[i])
             workload(core)
             compress(core, folder, sizes, j, param_set[i].rprms.fdens)
-            print("total time {}: {}s".format(j, time.time() - s))
+            print("total time {}.{}: {}s".format(
+                param_set[i].to_str(), j, time.time() - s))
             print("")
 
 

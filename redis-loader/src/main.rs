@@ -215,6 +215,8 @@ impl Client {
                 let val = self.norm_dist.sample(&mut self.rng).round();
                 if val < 0.0 {
                     0
+                } else if val > 200.0 {
+                    200
                 } else {
                     val as u64
                 }
