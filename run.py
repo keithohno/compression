@@ -2,27 +2,29 @@
 import subprocess
 import json
 import time
+import random
 
 CORE_NAME = "core"
 
 
 class RecParams:
-    def __init__(self, fcount=0, fdist='c', fcapmin=0, fcapmax=1, fcap=100, fdens=1.0):
+    def __init__(self, fcount=0, fdist='c', frange=10, fav=100, fdens=1.0, fstd=10):
         self.fcount = fcount
         self.fdist = fdist
-        self.fcapmin = fcapmin
-        self.fcapmax = fcapmax
-        self.fcap = fcap
+        self.frange = frange
+        self.fav = fav
         self.fdens = fdens
+        self.fstd = fstd
 
-    def to_str(self, fcount=False, fdist=False, fcapmin=False, fcapmax=False, fcap=False, fdens=False):
-        return ("{} {} {} {} {} {}".format(
-            self.fcount if fcount else '',
-            self.fdist if fdist else '',
-            self.fcapmin if fcapmin else '',
-            self.fcapmax if fcapmax else '',
-            self.fcap if fcap else '',
-            self.fdens if fdens else ''))
+    def __str__(self):
+        if self.fdist == 'c':
+            return "c{:03d}".format(self.fav)
+        elif self.fdist == 'u':
+            return "u{:03d}-{:03d}".format(self.fav, self.frange)
+        elif self.fdist == 'n':
+            return "n{:03d}-{:03d}".format(self.fav, self.fstd)
+        else:
+            return "p{:03d}".format(self.fav)
 
 
 class WLParams:
@@ -31,11 +33,11 @@ class WLParams:
         self.opct = opct
         self.rprms = rprms
 
-    def to_str(self, recct=False, opct=False, fcount=False, fcap=False, fdens=False):
-        return("{} {} {}".format(
+    def to_str(self, recct=False, opct=False):
+        return "{} {} {}".format(
             self.recct if recct else '',
             self.opct if opct else '',
-            self.rprms.to_str(fcount=fcount, fcap=fcap, fdens=fdens)))
+            str(self.rprms))
 
 
 def blockproc(proc):
@@ -43,6 +45,7 @@ def blockproc(proc):
         proc.wait()
         if proc.returncode != 0:
             print("exiting (subprocess error)...")
+            print(proc.communicate()[0])
             exit()
     except KeyboardInterrupt:
         print("exiting (keyboard interrupt)...")
@@ -51,7 +54,8 @@ def blockproc(proc):
 
 
 def workload(name):
-    proc = subprocess.Popen(['./workload.sh', name])
+    proc = subprocess.Popen(['./workload.sh', name],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     blockproc(proc)
 
 
@@ -61,11 +65,11 @@ def load_params(params):
         "operation_count": params.opct,
         "record_params": {
             "field_count": params.rprms.fcount,
-            "field_cap_dist": params.rprms.fdist,
-            "field_cap_min": params.rprms.fcapmin,
-            "field_cap_max": params.rprms.fcapmax,
-            "field_cap": params.rprms.fcap,
+            "field_dist": params.rprms.fdist,
+            "field_range": params.rprms.frange,
+            "field_av": params.rprms.fav,
             "field_density": params.rprms.fdens,
+            "field_std": params.rprms.fstd
         }
     })
     f = open('redis-loader/config.json', 'w+')
@@ -183,27 +187,29 @@ def main():
     base = 'test2'
     core = CORE_NAME
 
-    test_set = [('c', 100, 101), ('u', 80, 121),
-                ('u', 60, 141), ('u', 90, 111), ('u', 70, 131)]
+    test_set = [('c', 2, 1), ('u', 40, 2), ('u', 80, 2),
+                ('u', 20, 2), ('u', 60, 2), ('n', 2, 10),
+                ('n', 2, 20), ('n', 2, 30), ('p', 2, 2)]
     param_set = []
 
-    for (fdist, fmin, fmax) in test_set:
-        param_set.append(WLParams(recct=4000000, opct=12000000,
+    for (fdist, frange, fstd) in test_set:
+        param_set.append(WLParams(recct=4000000, opct=120000,
                                   rprms=RecParams(fcount=5, fdist=fdist,
-                                                  fcap=100, fcapmin=fmin, fcapmax=fmax)))
+                                                  fav=100, frange=frange, fstd=fstd)))
 
     for i in range(len(param_set)):
-        folder = "test/{}/{}{:03d}_{:03d}".format(
-            base, param_set[i].rprms.fdist, param_set[i].rprms.fcapmin, param_set[i].rprms.fcapmax)
+        folder = "test/{}/{}".format(base, param_set[i].to_str().strip())
         clean(folder)
         status = get_status(folder)
         for j in range(status+1, 101, 1):
             s = time.time()
             param_set[i].rprms.fdens = j / 100
+            param_set[i].recct += random.randint(-200000, 200000)
             load_params(param_set[i])
             workload(core)
             compress(core, folder, sizes, j, param_set[i].rprms.fdens)
             print("total time {}: {}s".format(j, time.time() - s))
+            print("")
 
 
 if __name__ == '__main__':

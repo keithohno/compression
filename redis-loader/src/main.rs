@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 extern crate rand;
+extern crate rand_distr;
 extern crate redis;
 extern crate serde;
 extern crate serde_json;
@@ -12,8 +13,8 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
-use rand::distributions::{Distribution, Uniform};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
+use rand_distr::{Distribution, Normal, Poisson, Uniform};
 
 const FNV_OFFSET: Wrapping<usize> = Wrapping(0xCBF29CE484222325);
 const FNV_PRIME: Wrapping<usize> = Wrapping(1099511628211);
@@ -128,7 +129,9 @@ struct Client {
     pipe_vol: usize,
     record_params: RecordParams,
     uni_dist: Uniform<usize>,
-    cons_dist: usize,
+    cons_dist: u64,
+    norm_dist: Normal<f64>,
+    pois_dist: Poisson<f64>,
 }
 
 impl Client {
@@ -140,7 +143,17 @@ impl Client {
         let rng = StdRng::from_entropy();
         let pipe_cap = 16;
         let pipe = redis::Pipeline::with_capacity(pipe_cap);
-        let uni_dist = Uniform::from(record_params.field_cap_min..record_params.field_cap_max);
+        let uni_dist = Uniform::from(
+            record_params.field_av - record_params.field_range / 2
+                ..record_params.field_av + record_params.field_range / 2,
+        );
+        let norm_dist = Normal::new(
+            record_params.field_av as f64,
+            record_params.field_std as f64,
+        )
+        .expect("ERR: bad distributions params");
+        let pois_dist =
+            Poisson::new(record_params.field_av as f64).expect("ERR: bad distributions params");
         Self {
             conn,
             rng,
@@ -149,7 +162,9 @@ impl Client {
             pipe_vol: 0,
             record_params,
             uni_dist,
-            cons_dist: record_params.field_cap,
+            cons_dist: record_params.field_av as u64,
+            norm_dist,
+            pois_dist,
         }
     }
     fn flush_all(&mut self) {
@@ -194,14 +209,23 @@ impl Client {
         ret
     }
     fn build_field(&mut self) -> Vec<u8> {
-        let field_cap = match self.record_params.field_cap_dist {
-            'u' => self.uni_dist.sample(&mut self.rng),
+        let field_size = match self.record_params.field_dist {
+            'u' => self.uni_dist.sample(&mut self.rng) as u64,
+            'n' => {
+                let val = self.norm_dist.sample(&mut self.rng).round();
+                if val < 0.0 {
+                    0
+                } else {
+                    val as u64
+                }
+            }
+            'p' => self.pois_dist.sample(&mut self.rng),
             _ => self.cons_dist,
-        };
-        let field_vol = (field_cap as f64 * self.record_params.field_density) as usize;
+        } as usize;
+        let field_vol = (field_size as f64 * self.record_params.field_density) as usize;
         let mut bytes = vec![0; field_vol];
         self.rng.fill_bytes(&mut bytes);
-        bytes.append(&mut vec![0; field_cap - field_vol]);
+        bytes.append(&mut vec![0; field_size - field_vol]);
         bytes
     }
 }
@@ -216,11 +240,11 @@ struct WorkloadParams {
 #[derive(Serialize, Deserialize, Copy, Clone)]
 struct RecordParams {
     field_count: usize,
-    field_cap_dist: char,
-    field_cap_min: usize,
-    field_cap_max: usize,
-    field_cap: usize,
+    field_dist: char,
+    field_range: usize,
+    field_av: usize,
     field_density: f64,
+    field_std: usize,
 }
 
 fn main() {
