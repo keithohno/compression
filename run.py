@@ -184,7 +184,33 @@ def clean(folder):
     blockproc(proc)
 
 
-def main():
+def count_bytes(folder):
+    s = time.time()
+    proc = subprocess.Popen(['./count_zeros.sh', CORE_NAME, folder],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    output = proc.communicate()[0].decode(
+        'utf-8').split('SPLIT')
+    blockproc(proc)
+    # o1 = zeros, o2 = size, o3 = not zeros, o4 = sequence breakdown
+    o1 = output[1].strip()
+    o2 = output[3].split('\t')[0].strip()
+    o3 = int(o2) - int(o1)
+    o4 = output[2].strip().splitlines()
+
+    f = open("{}/zeros".format(folder), 'a+')
+    f.write("{} {} {}\n".format(o1, o2, o3))
+    f.close()
+
+    f = open("{}/breakdown".format(folder), 'a+')
+    for o in o4:
+        f.write("{0: <10} ".format(o))
+    f.write("\n")
+    f.close()
+
+    print("count: {}s".format(time.time() - s))
+
+
+def test2():
     sizes = ['256', '512', '1K', '2K', '4K']
     base = 'test2'
     core = CORE_NAME
@@ -214,5 +240,34 @@ def main():
             print("")
 
 
+def test3():
+    base = 'test3'
+    core = CORE_NAME
+
+    # test_set = [('c', 2, 1), ('u', 40, 2), ('u', 80, 2),
+    #             ('u', 20, 2), ('u', 60, 2), ('n', 2, 10),
+    #             ('n', 2, 20), ('n', 2, 30), ('p', 2, 2)]
+    test_set = [('n', 2, 30), ('p', 2, 2)]
+    param_set = []
+
+    for (fdist, frange, fstd) in test_set:
+        param_set.append(WLParams(recct=4000000, opct=12000000,
+                                  rprms=RecParams(fcount=5, fdist=fdist,
+                                                  fav=100, frange=frange, fstd=fstd)))
+
+    for i in range(len(param_set)):
+        folder = "test/{}/{}".format(base, param_set[i].to_str().strip())
+        clean(folder)
+        for j in range(0, 11, 1):
+            s = time.time()
+            param_set[i].rprms.fdens = j / 10
+            load_params(param_set[i])
+            workload(core)
+            count_bytes(folder)
+            print("total time {}.{}: {}s".format(
+                param_set[i].to_str(), j, time.time() - s))
+            print("")
+
+
 if __name__ == '__main__':
-    main()
+    test3()

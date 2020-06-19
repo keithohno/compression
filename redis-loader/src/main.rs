@@ -107,6 +107,7 @@ impl Worker {
                 Task::SetMulti(range) => client.set_multi(range),
                 Task::Quit => {
                     client.query();
+                    client.summarize();
                     break;
                 }
             };
@@ -132,6 +133,8 @@ struct Client {
     cons_dist: u64,
     norm_dist: Normal<f64>,
     pois_dist: Poisson<f64>,
+    total_bytes: usize,
+    total_reqs: usize,
 }
 
 impl Client {
@@ -145,7 +148,7 @@ impl Client {
         let pipe = redis::Pipeline::with_capacity(pipe_cap);
         let uni_dist = Uniform::from(
             record_params.field_av - record_params.field_range / 2
-                ..record_params.field_av + record_params.field_range / 2,
+                ..record_params.field_av + record_params.field_range / 2 + 1,
         );
         let norm_dist = Normal::new(
             record_params.field_av as f64,
@@ -165,6 +168,8 @@ impl Client {
             cons_dist: record_params.field_av as u64,
             norm_dist,
             pois_dist,
+            total_bytes: 0,
+            total_reqs: 0,
         }
     }
     fn flush_all(&mut self) {
@@ -228,7 +233,17 @@ impl Client {
         let mut bytes = vec![0; field_vol];
         self.rng.fill_bytes(&mut bytes);
         bytes.append(&mut vec![0; field_size - field_vol]);
+        self.total_bytes += field_size;
+        self.total_reqs += 1;
         bytes
+    }
+    fn summarize(&self) {
+        println!(
+            "average bytes: {}   total bytes: {}   total reqs: {}",
+            self.total_bytes as f64 / self.total_reqs as f64,
+            self.total_bytes,
+            self.total_reqs
+        )
     }
 }
 
