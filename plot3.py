@@ -13,10 +13,6 @@ def extract(line):
     return list(map(lambda x: int(x), line.split()[0:-1]))
 
 
-def csize_to_num(csize):
-    return float(csize.replace('K', '000'))
-
-
 def dir_filter(prefixes):
     return lambda dir_: dir_.split('/')[-1][0] in prefixes
 
@@ -31,7 +27,6 @@ def plot_all(ctype, prefixes, resid=True):
         f = open("{}/breakdown".format(dir_), 'r')
         data = list(map(extract, f.readlines()))
         for j, d in enumerate(data):
-            # print(j)
             axs[j][i].plot(d)
         axs[0][i].set_title(dir_.split('/')[-1])
     plt.show()

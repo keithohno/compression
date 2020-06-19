@@ -1,8 +1,3 @@
 test*
 YCSB
 *.dat
-
-redis-loader/target
-redis-loader/Cargo.lock
-count_zeros/target
-count_zeros/Cargo.lock

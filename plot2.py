@@ -55,8 +55,6 @@ def plot_all(ctype, prefixes, resid=True):
                     ys.append(d[2])
             xs = np.array(xs)
             axs[i].plot(xs, ys, '.', color=colors[j], ms=2)
-        # if not resid:
-        #     axs[i].plot(xs, m*xs + b)
         axs[i].set_title("{}".format(csize))
 
     for i, dir_ in enumerate(dirs):
