@@ -6,6 +6,7 @@ extern crate redis;
 extern crate serde;
 extern crate serde_json;
 
+use std::env;
 use std::num::Wrapping;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -264,19 +265,48 @@ struct RecordParams {
     field_std: usize,
 }
 
-fn main() {
-    let config = std::fs::read_to_string("config.json").expect("ERR: no config file");
-    let workload: WorkloadParams = serde_json::from_str(&config).expect("ERR: bad config file");
-    run_workload(workload);
+fn load_config() -> WorkloadParams {
+    let config = std::fs::read_to_string(format!(
+        "{}/config/redis-loader.json",
+        env::var("COMPRESSION_HOME").expect("ERR: could not find COMPRESSION_HOME")
+    ))
+    .expect("ERR: no config file");
+    serde_json::from_str(&config).expect("ERR: bad config file")
 }
 
-fn run_workload(workload: WorkloadParams) {
+pub fn workload_all() {
+    let workload = load_config();
     let start = Instant::now();
     let m = Manager::new(6, "redis://127.0.0.1/", workload.record_params);
     for i in 0..workload.record_count {
         m.dispatch(Task::Set(i));
     }
+    let mut rng = StdRng::from_entropy();
+    let keys = Uniform::from(0..workload.record_count);
+    for _ in 0..workload.operation_count {
+        m.dispatch(Task::Set(keys.sample(&mut rng)));
+    }
+    drop(m);
+    let duration = start.elapsed();
+    println!("redis-load: {:?}", duration);
+}
 
+pub fn workload_load() {
+    let workload = load_config();
+    let start = Instant::now();
+    let m = Manager::new(6, "redis://127.0.0.1/", workload.record_params);
+    for i in 0..workload.record_count {
+        m.dispatch(Task::Set(i));
+    }
+    drop(m);
+    let duration = start.elapsed();
+    println!("redis-load: {:?}", duration);
+}
+
+pub fn workload_run() {
+    let workload = load_config();
+    let start = Instant::now();
+    let m = Manager::new(6, "redis://127.0.0.1/", workload.record_params);
     let mut rng = StdRng::from_entropy();
     let keys = Uniform::from(0..workload.record_count);
     for _ in 0..workload.operation_count {

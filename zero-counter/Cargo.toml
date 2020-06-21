@@ -1,5 +1,5 @@
 [package]
-name = "count_zeros"
+name = "zero-counter"
 version = "0.1.0"
 authors = ["Keith Zhang <keithohno@gmail.com>"]
 edition = "2018"
