@@ -8,5 +8,5 @@ fi
 cd $COMPRESSION_HOME/redis-loader
 cargo build --release
 
-cd $COMPRESSION_HOME/count_zeros
+cd $COMPRESSION_HOME/zero-counter
 cargo build --release

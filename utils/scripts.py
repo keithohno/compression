@@ -23,11 +23,6 @@ def block(proc):
 
 
 def run_script(script, quiet=True):
-    try:
-        os.environ['COMPRESSION_HOME']
-    except:
-        print("ERR: need to set COMPRESSION_HOME")
-        exit(1)
     script = "{}/{}".format(os.environ['COMPRESSION_HOME'], script)
     if quiet:
         proc = subprocess.Popen(
@@ -52,6 +47,10 @@ def redis_run(quiet=True):
 
 def redis_all(quiet=True):
     run_script('redis-loader/target/release/all', quiet)
+
+
+def zero_count(quiet=True):
+    run_script('zero-counter/target/release/zero-counter', quiet)
 
 
 def dump(quiet=True):
