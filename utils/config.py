@@ -53,14 +53,13 @@ def load_config(params):
     config = json.dumps({
         "record_count": params.recct,
         "operation_count": params.opct,
-        "record_params": {
-            "field_count": params.fcount,
-            "field_dist": params.fdist,
-            "field_range": params.frange,
-            "field_av": params.fav,
-            "field_density": params.fdens,
-            "field_std": params.fstd
-        }})
+        "field_count": params.fcount,
+        "field_dist": params.fdist,
+        "field_range": params.frange,
+        "field_av": params.fav,
+        "field_density": params.fdens,
+        "field_std": params.fstd
+    })
     f = open(
         "{}/config/redis-loader.json".format(os.environ['COMPRESSION_HOME']), 'w+')
     f.write(config)
