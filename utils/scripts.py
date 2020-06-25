@@ -56,7 +56,7 @@ def redis_all(quiet=True):
 
 def zero_count(quiet=True):
     run_script(sdir('zero-counter/target/release/zero-counter'),
-               args=[sdir('../out/core')], quiet=quiet)
+               args=[sdir('../out/core'), sdir('../out/zeros')], quiet=quiet)
 
 
 def dump(quiet=True):

@@ -1,13 +1,52 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 
 const HIST_SIZE: usize = 50;
 
-fn count_zeros() -> io::Result<()> {
-    let args: Vec<String> = env::args().collect();
-    let file = File::open(args.get(1).expect("ERR: please specify core file"))
-        .expect("ERR: could not find core file");
+struct ZeroInfo {
+    z_hist: [u128; HIST_SIZE],
+    nz_hist: [u128; HIST_SIZE],
+    z_tot_hist: [u128; HIST_SIZE],
+    nz_tot_hist: [u128; HIST_SIZE],
+}
+
+impl ZeroInfo {
+    fn report(self) {
+        for i in 1..HIST_SIZE {
+            println!("z {} {}", i, self.z_hist[i]);
+        }
+        for i in 1..HIST_SIZE {
+            println!("nz {} {}", i, self.nz_hist[i]);
+        }
+        for i in 1..HIST_SIZE {
+            println!("zt {} {}", i, self.z_tot_hist[i]);
+        }
+        for i in 1..HIST_SIZE {
+            println!("nzt {} {}", i, self.nz_tot_hist[i]);
+        }
+    }
+    fn report_file(self, file: &mut File) {
+        for i in 1..HIST_SIZE {
+            file.write(format!("z {} {}\n", i, self.z_hist[i]).as_bytes())
+                .expect("ERR: file write error");
+        }
+        for i in 1..HIST_SIZE {
+            file.write(format!("nz {} {}\n", i, self.nz_hist[i]).as_bytes())
+                .expect("ERR: file write error");
+        }
+        for i in 1..HIST_SIZE {
+            file.write(format!("zt {} {}\n", i, self.z_tot_hist[i]).as_bytes())
+                .expect("ERR: file write error");
+        }
+        for i in 1..HIST_SIZE {
+            file.write(format!("nzt {} {}\n", i, self.nz_tot_hist[i]).as_bytes())
+                .expect("ERR: file write error");
+        }
+    }
+}
+
+fn count_zeros(file: File) -> ZeroInfo {
     let mut reader = BufReader::with_capacity(10000, file);
     let mut z_hist: [u128; HIST_SIZE] = [0; HIST_SIZE];
     let mut nz_hist: [u128; HIST_SIZE] = [0; HIST_SIZE];
@@ -16,7 +55,7 @@ fn count_zeros() -> io::Result<()> {
     let mut z_current = 0;
     let mut nz_current = 0;
     loop {
-        let buffer = reader.fill_buf()?;
+        let buffer = reader.fill_buf().expect("ERR: file read error");
         let length = buffer.len();
         for &b in buffer {
             if b == 0 {
@@ -51,22 +90,23 @@ fn count_zeros() -> io::Result<()> {
         }
         reader.consume(length);
     }
-    for i in 1..HIST_SIZE {
-        println!("z {} {}", i, z_hist[i]);
+    ZeroInfo {
+        z_hist,
+        nz_hist,
+        z_tot_hist,
+        nz_tot_hist,
     }
-    for i in 1..HIST_SIZE {
-        println!("nz {} {}", i, nz_hist[i]);
-    }
-    for i in 1..HIST_SIZE {
-        println!("zt {} {}", i, z_tot_hist[i]);
-    }
-    for i in 1..HIST_SIZE {
-        println!("nzt {} {}", i, nz_tot_hist[i]);
-    }
-
-    Ok(())
 }
 
-fn main() -> io::Result<()> {
-    count_zeros()
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let core = File::open(args.get(1).expect("ERR: please specify core file"))
+        .expect("ERR: could not find core file");
+    let info = count_zeros(core);
+    if args.len() > 2 {
+        let mut out = File::create(&args[2]).expect("ERR: could not create output file");
+        info.report_file(&mut out);
+    } else {
+        info.report();
+    }
 }
