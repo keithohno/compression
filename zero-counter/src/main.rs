@@ -1,26 +1,49 @@
+use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 
+const HIST_SIZE: usize = 50;
+
 fn count_zeros() -> io::Result<()> {
-    let file = File::open("core")?;
+    let file = File::open(format!(
+        "{}/out/core",
+        env::var("COMPRESSION_HOME").expect("ERR: could not find COMPRESSION_HOME")
+    ))?;
     let mut reader = BufReader::with_capacity(10000, file);
-    let mut counter: [u128; 50] = [0; 50];
-    let mut total: u128 = 0;
-    let mut zero_seq_len: usize = 0;
+    let mut z_hist: [u128; HIST_SIZE] = [0; HIST_SIZE];
+    let mut nz_hist: [u128; HIST_SIZE] = [0; HIST_SIZE];
+    let mut z_tot_hist: [u128; HIST_SIZE] = [0; HIST_SIZE];
+    let mut nz_tot_hist: [u128; HIST_SIZE] = [0; HIST_SIZE];
+    let mut z_current = 0;
+    let mut nz_current = 0;
     loop {
         let buffer = reader.fill_buf()?;
         let length = buffer.len();
         for &b in buffer {
             if b == 0 {
-                zero_seq_len += 1;
-                total += 1;
-            } else {
-                if zero_seq_len > 49 {
-                    counter[49] += zero_seq_len as u128;
-                } else {
-                    counter[zero_seq_len] += zero_seq_len as u128;
+                z_current += 1;
+                if nz_current != 0 {
+                    if nz_current >= HIST_SIZE {
+                        nz_tot_hist[HIST_SIZE - 1] += nz_current as u128;
+                        nz_hist[HIST_SIZE - 1] += 1;
+                    } else {
+                        nz_tot_hist[nz_current] += nz_current as u128;
+                        nz_hist[nz_current] += 1;
+                    }
+                    nz_current = 0;
                 }
-                zero_seq_len = 0;
+            } else {
+                nz_current += 1;
+                if z_current != 0 {
+                    if z_current >= HIST_SIZE {
+                        z_tot_hist[HIST_SIZE - 1] += z_current as u128;
+                        z_hist[HIST_SIZE - 1] += 1;
+                    } else {
+                        z_tot_hist[z_current] += z_current as u128;
+                        z_hist[z_current] += 1;
+                    }
+                    z_current = 0;
+                }
             }
         }
 
@@ -29,11 +52,17 @@ fn count_zeros() -> io::Result<()> {
         }
         reader.consume(length);
     }
-    println!("SPLIT");
-    println!("{}", total);
-    println!("SPLIT");
-    for i in 0..counter.len() {
-        println!("{}", counter[i]);
+    for i in 1..HIST_SIZE {
+        println!("z {} {}", i, z_hist[i]);
+    }
+    for i in 1..HIST_SIZE {
+        println!("nz {} {}", i, nz_hist[i]);
+    }
+    for i in 1..HIST_SIZE {
+        println!("zt {} {}", i, z_tot_hist[i]);
+    }
+    for i in 1..HIST_SIZE {
+        println!("nzt {} {}", i, nz_tot_hist[i]);
     }
 
     Ok(())
