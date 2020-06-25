@@ -3,6 +3,10 @@ import subprocess
 import os
 
 
+def sdir(path=""):
+    return "{}/{}".format(os.path.dirname(os.path.realpath(__file__)), path)
+
+
 def block(proc):
     try:
         proc.wait()
@@ -22,40 +26,43 @@ def block(proc):
         exit()
 
 
-def run_script(script, quiet=True):
-    script = "{}/{}".format(os.environ['COMPRESSION_HOME'], script)
+def run_script(script, *, args=[], quiet=True):
     if quiet:
         proc = subprocess.Popen(
-            script, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            [script] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
-        proc = subprocess.Popen(
-            script, stderr=subprocess.PIPE)
+        proc = subprocess.Popen([script] + args)
     block(proc)
 
 
 def flush(quiet=True):
-    run_script('utils/redis/flush.sh', quiet)
+    run_script(sdir('bash/flush.sh'), quiet=quiet)
 
 
 def redis_load(quiet=True):
-    run_script('redis-loader/target/release/load', quiet)
+    run_script(sdir('redis-loader/target/release/load'),
+               args=[sdir('../config/redis-loader.json')], quiet=quiet)
 
 
 def redis_run(quiet=True):
-    run_script('redis-loader/target/release/run', quiet)
+    run_script(sdir('redis-loader/target/release/run'),
+               args=[sdir('../config/redis-loader.json')], quiet=quiet)
 
 
 def redis_all(quiet=True):
-    run_script('redis-loader/target/release/all', quiet)
+    run_script(sdir('redis-loader/target/release/all'),
+               args=[sdir('../config/redis-loader.json')], quiet=quiet)
 
 
 def zero_count(quiet=True):
-    run_script('zero-counter/target/release/zero-counter', quiet)
+    run_script(sdir('zero-counter/target/release/zero-counter'),
+               args=[sdir('../out/core')], quiet=quiet)
 
 
 def dump(quiet=True):
-    run_script('utils/redis/dump.sh', quiet)
+    run_script(sdir('bash/dump.sh'), args=[sdir('../out')], quiet=quiet)
 
 
 def build(quiet=True):
-    run_script('utils/build.sh', quiet)
+    run_script(sdir('bash/build.sh'),
+               args=[sdir('redis-loader'), sdir('zero-counter')], quiet=quiet)

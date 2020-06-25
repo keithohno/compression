@@ -255,11 +255,9 @@ struct WorkloadParams {
 }
 
 fn load_config() -> WorkloadParams {
-    let config = std::fs::read_to_string(format!(
-        "{}/config/redis-loader.json",
-        env::var("COMPRESSION_HOME").expect("ERR: could not find COMPRESSION_HOME")
-    ))
-    .expect("ERR: no config file");
+    let args: Vec<String> = env::args().collect();
+    let config = std::fs::read_to_string(args.get(1).expect("ERR: please specify config file"))
+        .expect("ERR: could not find config file");
     serde_json::from_str(&config).expect("ERR: bad config file")
 }
 

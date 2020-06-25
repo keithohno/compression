@@ -4,6 +4,10 @@ import itertools
 import os
 
 
+def sdir(path=""):
+    return "{}/{}".format(os.path.dirname(os.path.realpath(__file__)), path)
+
+
 class Config:
     def __init__(self, recct=1, opct=1, fcount=1, fav=1, fdens=1.0, fdist='c', frange=1, fstd=1):
         self.recct = recct
@@ -26,8 +30,7 @@ class Config:
             "field_density": self.fdens,
             "field_std": self.fstd
         })
-        f = open(
-            "{}/config/redis-loader.json".format(os.environ['COMPRESSION_HOME']), 'w+')
+        f = open(sdir("../config/redis-loader.json"), 'w+')
         f.write(config_str)
         f.close()
 
@@ -84,7 +87,7 @@ class ConfigIter:
     def bind(self, test_name):
         self.name = test_name
         self.current = read_status_file(
-            "{}/test/{}/status".format(os.environ['COMPRESSION_HOME'], self.name))
+            sdir("../test/{}/status").format(self.name))
 
     def __iter__(self):
         if self.name == "":
@@ -100,4 +103,4 @@ class ConfigIter:
     def inc(self):
         self.current += 1
         write_status_file(
-            "{}/test/{}/status".format(os.environ['COMPRESSION_HOME'], self.name), self.current)
+            sdir("../test/{}/status").format(self.name), self.current)

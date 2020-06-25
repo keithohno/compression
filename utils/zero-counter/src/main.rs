@@ -5,10 +5,9 @@ use std::io::{self, BufRead, BufReader};
 const HIST_SIZE: usize = 50;
 
 fn count_zeros() -> io::Result<()> {
-    let file = File::open(format!(
-        "{}/out/core",
-        env::var("COMPRESSION_HOME").expect("ERR: could not find COMPRESSION_HOME")
-    ))?;
+    let args: Vec<String> = env::args().collect();
+    let file = File::open(args.get(1).expect("ERR: please specify core file"))
+        .expect("ERR: could not find core file");
     let mut reader = BufReader::with_capacity(10000, file);
     let mut z_hist: [u128; HIST_SIZE] = [0; HIST_SIZE];
     let mut nz_hist: [u128; HIST_SIZE] = [0; HIST_SIZE];
