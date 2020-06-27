@@ -2,7 +2,7 @@ use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 
-const HIST_SIZE: usize = 50;
+const HIST_SIZE: usize = 120;
 
 struct ZeroInfo {
     z_hist: [u128; HIST_SIZE],

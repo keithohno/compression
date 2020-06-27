@@ -1,44 +1,30 @@
 import random
 import os
-from utils import scripts, coordinator as coord, misc
+from functools import reduce
+from utils import scripts, config, misc
 
 scripts.build()
 
 
-class CTest4:
-
-    @staticmethod
-    def dir_name_fn(config):
-        return "rct{}".format(config.recct)
-
-    @staticmethod
-    def zero_log(data, **kwargs):
-        lines = data.strip().splitlines()
-        output = {}
-        for l in lines:
-            words = l.strip().split()
-            if not words[0] in output:
-                output[words[0]] = ""
-            output[words[0]] += "{} ".format(words[2])
-        for k in output.keys():
-            output[k] += '\n'
-        return output
-
-
 def ctest4():
-    reccts = [(i + 1) * 500000 for i in range(10)]
-    opct = 500000
-    coordinator = coord.Coordinator("test4",
-                                    recct=reccts, opct=opct, fcount=5, fdist='c', fav=100)
-    coordinator.zero_log = CTest4.zero_log
-    coordinator.dir_name_fn = CTest4.dir_name_fn
-    while not coordinator.finished:
-        c = coordinator.next()
-        c.load()
-        for i in range(10):
+    configs = []
+    for recct in [(i + 1) * 500000 for i in range(10)]:
+        configs.append(config.Config(
+            recct=recct, opct=recct, fcount=5, fav=100, fdist='c'))
+
+    status = misc.Status('test4', len(configs))
+
+    while not status.finished:
+        conf = configs[status.current]
+        conf.load()
+
+        # consecutive workloads (without flush)
+        for i in range(15):
+            # init
             print("\n{}.{}:  R={}  O={}".format(
-                coordinator.status, i, c.recct, opct*i))
+                status.current, i, conf.recct, recct*i))
             stopwatch = misc.Stopwatch()
+            # flush and load/run
             if i == 0:
                 scripts.flush()
                 stopwatch.lap(' - - flush: ')
@@ -46,13 +32,40 @@ def ctest4():
             else:
                 scripts.redis_run()
             stopwatch.lap(' - - workload: ')
+            # dump
             scripts.dump()
             stopwatch.lap(' - - dump: ')
+            # count zeros
             scripts.zero_count()
-            coordinator.log()
+            out = misc.read_file("out/zeros")
+            # if first iter: reset, else: add SPLIT marker
+            for suff in ['z', 'nz', 'zt', 'nzt']:
+                if i == 0:
+                    misc.write_file("out/test4_" + suff, "")
+                else:
+                    misc.append_file("out/test4_" + suff, "SPLIT")
+            # pass output to tmp files
+            for l in out.splitlines():
+                if len(l) > 0:
+                    misc.append_file("out/test4_" + l.split()[0], l + '\n')
             stopwatch.lap(' - - zeros: ')
             stopwatch.total(' - total: ')
-        coordinator.inc()
+
+        # processing output
+        for suff in ['z', 'nz', 'zt', 'nzt']:
+            # split by SPLIT marker
+            output = misc.read_file("out/test4_" + suff).split('SPLIT')
+            # split by line
+            output = [x.strip().splitlines() for x in output]
+            # take third word of each line
+            output = [[y.split()[2] for y in x] for x in output]
+            # reduce lists of nums to space separated string
+            output = [reduce(lambda t, s: t + ' ' + s, x) for x in output]
+            # reduce list of strings to \n separated string
+            output = reduce(lambda t, s: t + '\n' + s, output)
+            misc.write_file(
+                "res/test4/rec{}/{}".format(conf.recct, suff), output)
+        status.inc()
 
 
 ctest4()
