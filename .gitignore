@@ -1,3 +1,4 @@
-test*
-out/*
-config/*
+res/
+out/
+config/
+__pycache__/
