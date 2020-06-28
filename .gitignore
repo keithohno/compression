@@ -2,3 +2,5 @@ res/
 out/
 config/
 __pycache__/
+target/
+Cargo.lock

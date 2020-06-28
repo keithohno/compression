@@ -1,5 +1,5 @@
 [package]
-name = "zstd"
+name = "compress"
 version = "0.1.0"
 authors = ["Keith Zhang <keithohno@gmail.com>"]
 edition = "2018"
@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 zstd = "0.5"
+lz4 = "1.23.1"
