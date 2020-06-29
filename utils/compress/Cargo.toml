@@ -9,3 +9,7 @@ edition = "2018"
 [dependencies]
 zstd = "0.5"
 lz4 = "1.23.1"
+
+[lib]
+name = "lib"
+path = "src/lib.rs"

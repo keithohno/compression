@@ -54,6 +54,16 @@ def redis_all(quiet=True):
                args=[sdir('../config/redis-loader.json')], quiet=quiet)
 
 
+def compress_zstd(quiet=True):
+    run_script(sdir('compress/target/release/zstd'),
+               args=[sdir('../out/core'), sdir('../out/zstd')], quiet=quiet)
+
+
+def compress_lz4(quiet=True):
+    run_script(sdir('compress/target/release/lz4'),
+               args=[sdir('../out/core'), sdir('../out/lz4')], quiet=quiet)
+
+
 def zero_count(quiet=True):
     run_script(sdir('zero-counter/target/release/zero-counter'),
                args=[sdir('../out/core'), sdir('../out/zeros')], quiet=quiet)
@@ -65,4 +75,4 @@ def dump(quiet=True):
 
 def build(quiet=True):
     run_script(sdir('bash/build.sh'),
-               args=[sdir('redis-loader'), sdir('zero-counter')], quiet=quiet)
+               args=[sdir('redis-loader'), sdir('zero-counter'), sdir('compress')], quiet=quiet)
