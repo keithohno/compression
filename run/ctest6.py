@@ -38,9 +38,9 @@ def run():
         scripts.zero_count()
         stopwatch.lap(' - - zeros: ')
         # write into final res folder
-        res_zstd_out(conf.recct)
-        res_lz4_out(conf.recct)
-        res_zeros_out(conf.recct)
+        res_zstd_out(conf.fcount)
+        res_lz4_out(conf.fcount)
+        res_zeros_out(conf.fcount)
         status.inc()
         stopwatch.total(' - total: ')
 
@@ -66,8 +66,8 @@ def res_zstd_out(fcount):
     # reduce lists of nums to space separated string
     output = reduce(lambda t, s: str(t) + ' ' + str(s), output)
     # write to res file
-    misc.write_file(
-        "res/test6/fc{}/zstd".format(fcount), output)
+    misc.append_file(
+        "res/test6/fc{}/zstd".format(fcount), output + '\n')
 
 
 def res_lz4_out(fcount):
@@ -78,5 +78,5 @@ def res_lz4_out(fcount):
     # reduce lists of nums to space separated string
     output = reduce(lambda t, s: str(t) + ' ' + str(s), output)
     # write to res file
-    misc.write_file(
-        "res/test6/fc{}/lz4".format(fcount), output)
+    misc.append_file(
+        "res/test6/fc{}/lz4".format(fcount), output + '\n')
