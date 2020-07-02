@@ -83,8 +83,8 @@ class Status:
     def __init__(self, test, max_stat):
         self.test = test
         self.current = init_status("res/{}/status".format(test))
-        self.finished = False
         self.max_stat = max_stat
+        self.finished = True if self.current >= self.max_stat else False
 
     def inc(self):
         self.current += 1

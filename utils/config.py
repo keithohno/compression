@@ -8,7 +8,7 @@ sdir = os.path.dirname(os.path.realpath(__file__))
 
 
 class Config:
-    def __init__(self, recct=1, opct=1, fcount=1, fav=1, fdens=1.0, fdist='c', frange=1, fstd=1):
+    def __init__(self, recct=1, opct=1, fcount=1, fav=1, fdens=1.0, fdist='c', frange=1, fstd=1, pref='user', fpref='field'):
         self.recct = recct
         self.opct = opct
         self.fcount = fcount
@@ -17,6 +17,8 @@ class Config:
         self.fav = fav
         self.fdens = fdens
         self.fstd = fstd
+        self.pref = pref
+        self.fpref = fpref
 
     def load(self):
         config_str = json.dumps({
@@ -27,7 +29,9 @@ class Config:
             "field_range": self.frange,
             "field_av": self.fav,
             "field_density": self.fdens,
-            "field_std": self.fstd
+            "field_std": self.fstd,
+            "field_prefix": self.fpref,
+            "key_prefix": self.pref
         })
         path = "{}/../config/redis-loader.json".format(sdir)
         try:

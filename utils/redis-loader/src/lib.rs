@@ -51,7 +51,7 @@ impl Manager {
         let rx = Arc::new(Mutex::new(rx));
         let mut workers = Vec::new();
         for i in 0..n {
-            workers.push(Worker::new(String::from(addr), rx.clone(), params));
+            workers.push(Worker::new(String::from(addr), rx.clone(), params.clone()));
             workers[i].run();
         }
         Self { workers, tx }
@@ -89,7 +89,7 @@ impl Worker {
         }
     }
     fn run(&mut self) {
-        let mut client = Client::new(&self.addr, self.params);
+        let mut client = Client::new(&self.addr, self.params.clone());
         let rx = Arc::clone(&self.rx);
         let handle = thread::spawn(move || loop {
             let task = rx
@@ -150,6 +150,7 @@ impl Client {
             .expect("ERR: bad distributions params");
         let pois_dist =
             Poisson::new(params.field_av as f64).expect("ERR: bad distributions params");
+        let cons_dist = params.field_av as u64;
         Self {
             conn,
             rng,
@@ -159,7 +160,7 @@ impl Client {
             params,
             keys,
             uni_dist,
-            cons_dist: params.field_av as u64,
+            cons_dist,
             norm_dist,
             pois_dist,
             total_bytes: 0,
@@ -172,7 +173,7 @@ impl Client {
             .expect("ERR: redis flushall");
     }
     fn set(&mut self, key: usize) {
-        let key = format!("user{}", fnv(key));
+        let key = format!("{}{}", self.params.key_prefix, fnv(key));
         if self.params.field_count == 0 {
             let val = self.build_field();
             self.pipe.set(key, val);
@@ -205,7 +206,10 @@ impl Client {
     fn build_set(&mut self) -> Vec<(String, Vec<u8>)> {
         let mut ret: Vec<(String, Vec<u8>)> = Vec::new();
         for i in 0..self.params.field_count {
-            ret.push((format!("field{}", i), self.build_field()))
+            ret.push((
+                format!("{}{}", self.params.field_prefix, i),
+                self.build_field(),
+            ))
         }
         ret
     }
@@ -242,7 +246,7 @@ impl Client {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct WorkloadParams {
     record_count: usize,
     operation_count: usize,
@@ -252,6 +256,8 @@ struct WorkloadParams {
     field_av: usize,
     field_density: f64,
     field_std: usize,
+    field_prefix: String,
+    key_prefix: String,
 }
 
 fn load_config() -> WorkloadParams {
@@ -265,7 +271,7 @@ pub fn workload_all() {
     println!("Main pid : {}", std::process::id());
     let params = load_config();
     let start = Instant::now();
-    let m = Manager::new(6, "redis://127.0.0.1/", params);
+    let m = Manager::new(6, "redis://127.0.0.1/", params.clone());
     for i in 0..params.record_count {
         m.dispatch(Task::Set(i));
     }
@@ -280,7 +286,7 @@ pub fn workload_all() {
 pub fn workload_load() {
     let params = load_config();
     let start = Instant::now();
-    let m = Manager::new(6, "redis://127.0.0.1/", params);
+    let m = Manager::new(6, "redis://127.0.0.1/", params.clone());
     for i in 0..params.record_count {
         m.dispatch(Task::Set(i));
     }
@@ -292,7 +298,7 @@ pub fn workload_load() {
 pub fn workload_run() {
     let params = load_config();
     let start = Instant::now();
-    let m = Manager::new(6, "redis://127.0.0.1/", params);
+    let m = Manager::new(6, "redis://127.0.0.1/", params.clone());
     for _ in 0..(params.operation_count / 1000) {
         m.dispatch(Task::SetMulti(1000));
     }
