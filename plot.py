@@ -1,3 +1,3 @@
-from plot import ctest4
+from plot import ctest6
 
-ctest4.plot_all()
+ctest6.plot()
