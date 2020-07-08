@@ -19,6 +19,7 @@ class Stopwatch:
 
 
 def read_file(path):
+    """Relative to compression root directory"""
     path = "{}/../{}".format(sdir, path)
     init_file(path)
     try:
@@ -34,6 +35,7 @@ def read_file(path):
 
 
 def write_file(path, data):
+    """Relative to compression root directory"""
     path = "{}/../{}".format(sdir, path)
     init_file(path)
     try:
@@ -48,6 +50,7 @@ def write_file(path, data):
 
 
 def append_file(path, data):
+    """Relative to compression root directory"""
     path = "{}/../{}".format(sdir, path)
     init_file(path)
     try:
@@ -61,6 +64,12 @@ def append_file(path, data):
         f.close()
 
 
+def savefig(path, plt):
+    path = "{}/../{}".format(sdir, path)
+    init_dirs(path)
+    plt.savefig(path)
+
+
 def init_file(path):
     try:
         f = open((path), 'r')
@@ -71,12 +80,24 @@ def init_file(path):
         f.close()
 
 
+def init_dirs(path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+
 def init_status(path):
     status = read_file(path)
     if status == '':
         write_file(path, '0')
         return 0
     return int(status)
+
+
+def extract_file(path):
+    """Relative to compression root directory"""
+    lines = read_file(path).splitlines()
+    lines = [line.split() for line in lines]
+    lines = [list(map(lambda x: int(x), line)) for line in lines]
+    return lines
 
 
 class Status:

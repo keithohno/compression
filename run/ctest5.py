@@ -10,17 +10,16 @@ def run():
     configs = []
     for recct in [(i + 1) * 500000 for i in range(10)]:
         configs.append(config.Config(
-            recct=recct, opct=recct, fcount=5, fav=100, fdist='c'))
+            recct=recct, opct=int(recct / 4), fcount=5, fav=100, fdist='c'))
 
     status = misc.Status('test5', len(configs))
 
     while not status.finished:
         conf = configs[status.current]
         conf.load()
-        print(status.current)
 
         # consecutive workloads (without flush)
-        for i in range(15):
+        for i in range(40):
             # init
             print("\n{}.{}:  R={}  O={}".format(
                 status.current, i, conf.recct, recct*i))
@@ -107,9 +106,9 @@ def res_zstd_out(recct):
     # split by line
     output = [x.strip().splitlines() for x in output]
     # take second word of each line and sort
-    output = [sorted([y.split()[1] for y in x]) for x in output]
+    output = [sorted([int(y.split()[1]) for y in x]) for x in output]
     # reduce lists of nums to space separated string
-    output = [reduce(lambda t, s: t + ' ' + s, x) for x in output]
+    output = [reduce(lambda t, s: str(t) + ' ' + str(s), x) for x in output]
     # reduce list of strings to \n separated string
     output = reduce(lambda t, s: t + '\n' + s, output)
     misc.write_file(
@@ -122,9 +121,9 @@ def res_lz4_out(recct):
     # split by line
     output = [x.strip().splitlines() for x in output]
     # take second word of each line and sort
-    output = [sorted([y.split()[1] for y in x]) for x in output]
+    output = [sorted([int(y.split()[1]) for y in x]) for x in output]
     # reduce lists of nums to space separated string
-    output = [reduce(lambda t, s: t + ' ' + s, x) for x in output]
+    output = [reduce(lambda t, s: str(t) + ' ' + str(s), x) for x in output]
     # reduce list of strings to \n separated string
     output = reduce(lambda t, s: t + '\n' + s, output)
     misc.write_file(
