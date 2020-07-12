@@ -6,14 +6,22 @@ from utils import scripts, config, misc
 scripts.build()
 
 
-def run(test, recct, pref, fpref):
+def run():
+    run_test('a', 1000000, 'user', 'field')
+    run_test('b', 100000, 'user', 'field')
+    run_test('c', 1000000, '', '')
+    run_test('d', 1000000, '', 'X' * 32)
+    run_test('e', 1000000, 'X' * 32, '')
+
+
+def run_test(test, recct, pref, fpref):
     configs = []
     for fcount in [i + 1 for i in range(5)]:
         for fav in [i + 1 for i in range(500)]:
             configs.append(config.Config(
-                recct=recct, opct=0, fcount=fcount, fav=fav, fdist='c', pref=pref, fpref=fpref))
+                recct=recct, opct=recct*5, fcount=fcount, fav=fav, fdist='c', pref=pref, fpref=fpref))
 
-    folder = 'test6' + test
+    folder = 'test6/' + test
     status = misc.Status(folder, len(configs))
 
     while not status.finished:
