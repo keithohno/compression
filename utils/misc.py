@@ -1,6 +1,7 @@
 
 import time
 import os
+import matplotlib as mpl
 
 sdir = os.path.dirname(os.path.realpath(__file__))
 
@@ -112,3 +113,8 @@ class Status:
         write_file("res/{}/status".format(self.test), str(self.current))
         if self.current >= self.max_stat:
             self.finished = True
+
+
+def palette(n):
+    hsv_list = [(.12 + i / 1.7 / n, .4, 1 - i / 1.4 / n) for i in range(n)]
+    return list(reversed([mpl.colors.hsv_to_rgb(x) for x in hsv_list]))
